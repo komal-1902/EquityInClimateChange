@@ -14,7 +14,9 @@ import pandas as pd
 import streamlit as st
 import geopandas as gpd
 import plotly.express as px
+import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+from matplotlib.colors import Normalize
 from collections import defaultdict, Counter
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -257,18 +259,30 @@ def plot_scatter(data_country_grouped, x_col, y_col):
         y=y_col,
         color='ResearchRegion',
         hover_name='Regions_updated',  # This will show the country name on hover
-        category_orders={'ResearchRegion': research_regions},  # Ensures the order of colors in the legend
+        category_orders={'ResearchRegion': ['Annex1', 'NonAnnex1', 'LDC', 'China', 'India', 'USA']},  # Ensures the order of colors in the legend
         size_max=None,  # Adjust the size of markers if needed
         title=y_col + " vs " + x_col
     )
     
+    
+    region_mapping = {
+        'NonAnnex1LDC': 'LDC',
+        'NonAnnex1China': 'China',
+        'NonAnnex1India': 'India',
+        'Annex1USA': 'USA'
+    }
+    
+    # Manually update the legend labels
+    for legend_entry in fig['data']:
+        legend_entry['name'] = region_mapping.get(legend_entry['name'], legend_entry['name'])
+        
     # Update the layout for white background and custom gridlines
     fig.update_layout(
         plot_bgcolor='white',  # Background inside the plot
         paper_bgcolor='white',  # Background outside the plot
         xaxis_title=x_col,
         yaxis_title=y_col,
-        legend_title="Regions",
+        legend_title="UNFCCC Groupings / Countries",
         font=dict(color='black'),  # Ensure text is visible
         xaxis=dict(
             showgrid=True,  # Show gridlines for the x-axis
@@ -331,7 +345,9 @@ def plot_grouped_bar(data_grouped):
         xaxis=dict(title='Journal', tickangle=90),
         yaxis=dict(title='Normalized Count of Publications'),
         legend_title_text='Grouping',
-        template='plotly_white'
+        template='plotly_white',
+        width=800,
+        height=600
     )
     
     st.plotly_chart(fig)
@@ -500,7 +516,95 @@ def plot_world_map(data_grouped, vulnerability, population):
     
     # Show the final plot
     plt.title("Publications over the world with Vulnerability Index")
-    st.pl
+    st.pyplot(fig)
+    
+def plot_interactive_world_map(data_grouped, vulnerability, population):
+    
+    data_pub = data_grouped[['Regions_updated', 'ResearchRegion', 'DOI', 'Altmetric']]
+    data_pub = data_pub.explode('Regions_updated')
+    data_pub = data_pub[~data_pub['Regions_updated'].isin(exclude_regions)]
+    data_pub = data_pub.groupby('Regions_updated').agg({'DOI': 'count', 'Altmetric': 'sum'}).reset_index()
+    data_pub.columns = ['Regions_updated', 'NumPublications', 'Altmetrics']
+    
+    # Load world map shapefile
+    world = gpd.read_file("config/shapefiles/ne_50m_admin_0_countries.shp")
+    world['Regions_updated'] = world['NAME'].apply(clean_regions)
+    world = world.explode('Regions_updated')
+    world = world.merge(vulnerability, on='Regions_updated', how='left')
+    world.loc[world['NAME'] == 'S. Sudan', 'VulnerabilityIndex'] = list(world.loc[world['NAME'] == 'Sudan', 
+                                                                                  'VulnerabilityIndex'])[0]
+    
+    world = world.merge(data_pub, on='Regions_updated', how='left')
+    world = world.merge(population, on='Regions_updated', how='left')
+    world['ResearchRegion'] = world['Regions_updated'].apply(get_singular_region)
+
+    world = world[world['VulnerabilityIndex'].isna() == False]
+    world['NumPublications'] = world['NumPublications'].fillna(0)
+    world['Population'] = world['Population'].fillna(0)
+    
+    fig = go.Figure()
+    
+    # Create a list for the custom hover text
+    world['hover_text'] = (
+        "Country: " + world['Regions_updated'].str.title() +
+        "<br>Population: " + world['Population'].apply(lambda x: '{:,}'.format(x)) +
+        "<br>Number of Publications: " + world['NumPublications'].astype(str) +
+        "<br>Vulnerability Index: " + world['VulnerabilityIndex'].apply(lambda x: '{:.3f}'.format(x)) +
+        "<br>UNFCCC Grouping: " + world['ResearchRegion'].astype(str)
+    )
+    
+    fig.add_trace(go.Choropleth(
+        locations=world['Regions_updated'],  # Match country names to Plotly's built-in geo map
+        z=world['VulnerabilityIndex'],
+        locationmode='country names',
+        colorscale='YlOrRd',
+        colorbar=dict(
+            title=dict(
+                text="ND-GAIN Vulnerability Index",  # Title text
+                side="right"  # Title position (default is 'right')
+            ),
+            ticks='outside',  # Style the ticks
+            x=1,  # Adjust position horizontally (closer to the map)
+            y=0.5,  # Center vertically
+        ),
+        hoverinfo='none'
+    ))
+    
+    fig.update_layout(
+        title="Publications Over the World with Vulnerability Index",
+        geo=dict(
+            showcoastlines=True,
+            projection_type='equirectangular'
+        ),
+        margin={"r":0, "t":50, "l":0, "b":0},  # Reduce margins for better fit
+    )
+    
+    fig.add_trace(go.Scattergeo(
+        locations=world['Regions_updated'],
+        locationmode='country names',
+        mode='markers',
+        text=world['hover_text'],  # Add custom hover text
+        hoverinfo='text',
+        marker=dict(
+            size=world['Population']/30000000,  # Scale population for size
+            color=world['NumPublications'],
+            colorscale='Blues',
+            cmin=world['NumPublications'].min(),  # Min publication value
+            cmax=world['NumPublications'].max(),
+            line=dict(color='black', width=0.5),
+            colorbar=dict(
+                title="Number of Publications",
+                ticks='outside',
+                x=0.5,  # Center it horizontally
+                y=-0.1,  # Position below the map
+                xanchor='center',  # Horizontal alignment of the colorbar
+                yanchor='top',
+                orientation='h',
+                len=0.6))))
+
+
+    st.plotly_chart(fig)
+
     
     
 
@@ -588,6 +692,8 @@ def main():
             plot_grouped_bar(data)
         elif nav_option == "Author Heatmaps":
             plot_heatmap(data)
+        elif nav_option == "World Map":
+            plot_interactive_world_map(data, vulnerability, population)
 
     
     
