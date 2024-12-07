@@ -9,57 +9,37 @@ Created on Tue Nov 19 18:33:51 2024
 import os
 import sys
 import ast
+import json
 import numpy as np
 import pandas as pd
 import streamlit as st
 import geopandas as gpd
 import plotly.express as px
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-from matplotlib.colors import Normalize
 from collections import defaultdict, Counter
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from config.country_mapping import country_mapping
-from config.regions import *
-from preprocessing import *
+import config.regions as rgn
+import helper_functions as func
+import text_content as tc
 
 @st.cache_data
 def load_data(file_path):
     """Load preprocessed data."""
     return pd.read_parquet(file_path)
 
-def read_vulnerability_data(file_path):
-    vulnerability = pd.read_csv(file_path)
-    vulnerability = vulnerability[['Name', '2022']]
-    vulnerability['Name'] = vulnerability['Name'].apply(clean_regions)
-    vulnerability = vulnerability.explode('Name')
-    vulnerability.columns = ['Regions_updated', 'VulnerabilityIndex']
-    return vulnerability
-    
-def read_population_data(file_path):
-    population = pd.read_csv(file_path)
-    population = population[population['Year'] == 2023][['Entity', 'Population (historical)']]
-    population['Entity'] = [country.lower() for country in population['Entity']]
-    population.loc[population['Entity'] == 'czechia','Entity'] = 'czech republic'
-    population.loc[population['Entity'] == 'hong kong','Entity'] = 'hongkong'
-    population.loc[population['Entity'] == 'brunei','Entity'] = 'brunei darussalam'
-    population = population[population['Entity'].isin(region_check_list_lower)]
-    population = population[~population['Entity'].isin(exclude_regions)]
-    population.columns = ['Regions_updated', 'Population']
-    return population
-
 def prepare_graph_data(data_grouped, vulnerability, population):
     data_country = data_grouped[['Regions_updated', 'ResearchRegion', 'DOI', 'Altmetric']]
     data_country = data_country.explode('Regions_updated')
-    data_country = data_country[~data_country['Regions_updated'].isin(exclude_regions)]
+    
+    data_country = data_country[~data_country['Regions_updated'].isin(rgn.exclude_regions)]
     
     data_country = pd.merge(data_country, vulnerability, on='Regions_updated', how='left')
     data_country = pd.merge(data_country, population, on='Regions_updated', how='left')
     data_country['VulnerabilityIndex'] = data_country['VulnerabilityIndex'].fillna(0)
     
-    data_country['ResearchRegion'] = data_country['ResearchRegion'].astype(str)
+    data_country['ResearchRegion'] = data_country['ResearchRegion'].apply(lambda x: repr(x.tolist()))
     data_country_grouped = data_country.groupby(['Regions_updated', 'ResearchRegion', 'VulnerabilityIndex', 'Population'])\
                                        .agg({'DOI': 'count', 'Altmetric': 'sum'}).reset_index()
     data_country_grouped.columns = ['Regions_updated', 'ResearchRegion', 'VulnerabilityIndex', 'Population', 'NumPublications', 'Altmetrics']
@@ -70,6 +50,7 @@ def prepare_graph_data(data_grouped, vulnerability, population):
     data_country_grouped['Altmetrics_sqrt'] = np.sqrt(data_country_grouped['Altmetrics'])
     
     data_country_grouped['ResearchRegion'] = data_country_grouped['ResearchRegion'].apply(ast.literal_eval)
+    
     data_country_grouped = data_country_grouped.explode('ResearchRegion')
     
     return data_country_grouped
@@ -92,8 +73,8 @@ def plot_bar(data_grouped, col, agg_func, col_name):
         for author_dict in data_grouped['AuthorCountry']:
           for author, country in author_dict.items():
             if country:
-              country = clean_regions(country)[0]
-              region = get_research_region(country)
+              country = func.clean_regions(country)[0]
+              region = func.get_research_region(country)
               if 'Annex1' in region:
                 annex1_count += 1
               if 'NonAnnex1' in region:
@@ -117,10 +98,19 @@ def plot_bar(data_grouped, col, agg_func, col_name):
     
     groupings = ['Region', 'Region', 'Region', 'Country', 'Country', 'Country']
     
+    total_annex1 = counts[0]
+    total_non_annex1 = counts[1]
+    total = total_annex1 + total_non_annex1
+
+    # Calculate percentages for hover data
+    percentages = [count / total * 100 if total > 0 else 0 for count in counts]
+    percentage_labels = [f"{percentage:.2f}%" for percentage in percentages]
+    
     plot_data = pd.DataFrame({
         'Category': categories,
         'Count': counts,
-        'Grouping': groupings
+        'Grouping': groupings,
+        'Percent of Total': percentage_labels
     })
     
     # Plot using Plotly Express
@@ -131,12 +121,17 @@ def plot_bar(data_grouped, col, agg_func, col_name):
         color='Grouping',
         title=col_name+' Distribution for UNFCCC Groupings',
         labels={'Category': 'Group / Country', 'Count': col_name},
-        color_discrete_map={'Region': 'steelblue', 'Country': 'lightcoral'}
+        color_discrete_map={'Region': 'steelblue', 'Country': 'lightcoral'},
+        hover_data={
+            'Grouping': False,
+            'Count': True,
+            'Percent of Total': True
+        }
     )
     
     # Customize layout
     fig.update_layout(
-        legend_title_text='Grouping',
+        legend_title_text='UNFCCC Grouping',
         xaxis_title='Group / Country',
         yaxis_title='Number of ' + col_name,
         yaxis=dict(gridcolor='#e3e3e3'),
@@ -171,8 +166,8 @@ def plot_line(data_grouped, col, agg_func, col_name):
             author_dict = row['AuthorCountry']
             for author, country in author_dict.items():
                 if country:  # Ensure the country is not None
-                    country = clean_regions(country)[0]
-                    region = get_research_region(country)
+                    country = func.clean_regions(country)[0]
+                    region = func.get_research_region(country)
                     for key in region_yearly_counts.keys():
                         if key in region:
                             region_yearly_counts[key][year] += 1
@@ -250,31 +245,24 @@ def plot_line(data_grouped, col, agg_func, col_name):
     
 
 
-def plot_scatter(data_country_grouped, x_col, y_col):
+def plot_scatter(data_country_grouped, x_col, y_col, col_name):
+    
+    data_country_grouped = data_country_grouped[data_country_grouped['ResearchRegion'].isin(['Annex1', 'NonAnnex1', 'LDC'])]
+    data_country_grouped['Regions_updated'] = data_country_grouped['Regions_updated'].str.title()
+    data_country_grouped = data_country_grouped.rename(columns={'ResearchRegion': 'UNFCCC Grouping'})
     
     # Assuming temp has columns 'NumPublications', 'population', 'ResearchRegions', and 'Country'
     fig = px.scatter(
         data_frame=data_country_grouped,
         x=x_col,
         y=y_col,
-        color='ResearchRegion',
+        color='UNFCCC Grouping',
         hover_name='Regions_updated',  # This will show the country name on hover
-        category_orders={'ResearchRegion': ['Annex1', 'NonAnnex1', 'LDC', 'China', 'India', 'USA']},  # Ensures the order of colors in the legend
+        hover_data={col_name: True},
+        category_orders={'UNFCCC Grouping': ['Annex1', 'NonAnnex1', 'LDC']},  # Ensures the order of colors in the legend
         size_max=None,  # Adjust the size of markers if needed
-        title=y_col + " vs " + x_col
+        title=col_name + " vs " + x_col
     )
-    
-    
-    region_mapping = {
-        'NonAnnex1LDC': 'LDC',
-        'NonAnnex1China': 'China',
-        'NonAnnex1India': 'India',
-        'Annex1USA': 'USA'
-    }
-    
-    # Manually update the legend labels
-    for legend_entry in fig['data']:
-        legend_entry['name'] = region_mapping.get(legend_entry['name'], legend_entry['name'])
         
     # Update the layout for white background and custom gridlines
     fig.update_layout(
@@ -302,8 +290,74 @@ def plot_scatter(data_country_grouped, x_col, y_col):
     fig.update_traces(marker=dict(size=10))  # Increase the marker size
     
     # Show the plot
-    #fig.show()
     st.plotly_chart(fig)
+    
+def plot_normalised_bar_plot(data_country_grouped):
+    data_region_grouped = data_country_grouped.groupby('ResearchRegion').agg({'NumPublications': 'sum', 'Population': 'sum'}).reset_index()
+    data_region_grouped['Normalised_Publications'] = data_region_grouped['NumPublications'] / data_region_grouped['Population']
+    data_region_grouped = data_region_grouped.sort_values('Normalised_Publications', ascending=False)
+    
+    #print(data_region_grouped.head(10))
+    
+    region_order = ['Annex1', 'NonAnnex1', 'LDC', 'USA', 'China', 'India']
+    #for region in region_order:
+    #    print(data_region_grouped.loc[data_region_grouped['ResearchRegion'] == region, 'Normalised_Publications'])
+    region_vals = [data_region_grouped.loc[data_region_grouped['ResearchRegion'] == region, 'Normalised_Publications'].values[0]
+                    for region in region_order]
+    region_vals_scaled = [val * 1e6 for val in region_vals]
+    
+    
+    
+    groupings = ['Region', 'Region', 'Region', 'Country', 'Country', 'Country']
+
+    # Create a DataFrame
+    plot_data = pd.DataFrame({
+        'Category': region_order,
+        'Count': region_vals_scaled,
+        'Grouping': groupings
+    })
+    
+    plot_data['Normalised Publications'] = plot_data['Count'].apply(lambda x: f"{x:.2f} x 10⁻⁶")
+    
+    # Plot using Plotly Express
+    fig = px.bar(
+        plot_data,
+        x='Category',
+        y='Count',
+        color='Grouping',
+        title='Population-Normalised Publication Distribution for UNFCCC Groupings',
+        labels={'Category': 'UNFCCC Grouping', 'Count': 'Normalised Publications'},
+        color_discrete_map={'Region': 'steelblue', 'Country': 'lightcoral'},
+        hover_data = {
+            'Grouping': False,
+            'Normalised Publications': True,
+        }
+    )
+    
+    # Customize layout
+    fig.update_layout(
+        legend_title_text='Grouping',
+        xaxis_title='Group / Country',
+        yaxis_title='Normalised Number of Publications',
+        yaxis=dict(gridcolor='#e3e3e3', tickformat='.1f'),
+        plot_bgcolor='white',
+        annotations=[
+            # Add a text annotation to indicate the scale is in 10⁻⁶
+            dict(
+                x=0,  # Positioning the annotation in the center
+                y=1.05,  # Slightly above the plot
+                xref="paper",
+                yref="paper",
+                text="Scale: 10⁻⁶",  # Scale information
+                showarrow=False,
+                font=dict(size=12, color='grey'),
+            )
+        ]
+    )
+    
+    st.plotly_chart(fig)
+    
+
     
 def plot_grouped_bar(data_grouped):
     
@@ -328,10 +382,20 @@ def plot_grouped_bar(data_grouped):
     # Create a bar for each region
     for region in regions:
         region_data = data_journal[data_journal['ResearchRegion'] == region]
+        
+        # Custom hovertemplate
+        hovertemplate = (
+            "Journal: %{x}<br>"  # Display Journal on hover
+            "UNFCCC Grouping: " + region + "<br>"  # Display the region from customdata
+            "Normalized Publication Count: %{y:.3f}<br>"  # Display the normalized count
+        )
+        
         fig.add_trace(go.Bar(
             x=region_data['Journal'],
             y=region_data['NormalizedCount'],
             name=region,
+            hovertemplate=hovertemplate,
+            hoverinfo='skip',
             marker=dict(
                 pattern_shape=hatch_patterns[region],  # Apply hatch pattern for specific regions
                 line=dict(color='black', width=1)
@@ -344,7 +408,7 @@ def plot_grouped_bar(data_grouped):
         title='Journal-Wise Distribution of Normalized Publications for UNFCCC Groupings',
         xaxis=dict(title='Journal', tickangle=90),
         yaxis=dict(title='Normalized Count of Publications'),
-        legend_title_text='Grouping',
+        legend_title_text='UNFCCC Grouping',
         template='plotly_white',
         width=800,
         height=600
@@ -361,27 +425,27 @@ def plot_heatmap(data_grouped):
         author_dict = row['AuthorCountry']
         for author, country in author_dict.items():
             if country:
-                country = clean_regions(country)[0]
-                all_author_region = get_research_region(country)
+                country = func.clean_regions(country)[0]
+                all_author_region = func.get_research_region(country)
                 for research_region in all_research_region:
                     for author_region in all_author_region:
                         intersection_counter[(research_region, author_region)] += 1
     
     # Create the matrix
-    matrix = np.zeros((len(research_regions), len(research_regions)))
-    for i, research in enumerate(research_regions):
-        for j, author in enumerate(research_regions):
+    matrix = np.zeros((len(rgn.research_regions), len(rgn.research_regions)))
+    for i, research in enumerate(rgn.research_regions):
+        for j, author in enumerate(rgn.research_regions):
             matrix[i, j] = intersection_counter.get((research, author), 0)
     
     # Flip and round the matrix
-    matrix_flipped = np.flipud(matrix)
-    matrix_rounded = np.round(np.sqrt(matrix_flipped), 0)
+    #matrix_flipped = np.flipud(matrix)
+    matrix_rounded = np.round(np.sqrt(matrix), 0)
     
     # Create the heatmap
     fig = go.Figure(data=go.Heatmap(
         z=matrix_rounded,
-        x=research_regions,
-        y=research_regions[::-1],
+        x=rgn.research_regions,
+        y=rgn.research_regions,
         colorscale='YlOrRd',
         colorbar=dict(
             title="Number of Publications",
@@ -390,8 +454,13 @@ def plot_heatmap(data_grouped):
             ticks="outside",  # Place ticks outside the color bar
             tickangle=0  # Ensure tick labels are horizontally aligned
         ),
-        text=matrix_flipped,  # Values to display inside the boxes
+        text=matrix,  # Values to display inside the boxes
         hoverinfo='x+y+text',  # Show the text (numbers) when hovering
+        hovertemplate=(
+            'Author Group = %{x}<br>' +
+            'Research Group = %{y}<br>' +
+            'Correlation Count = %{text}<extra></extra>'
+        ),  # Custom hover text format
         texttemplate='%{text}',
     ))
     
@@ -400,8 +469,8 @@ def plot_heatmap(data_grouped):
         title="Heatmap of Publications: Research Groups vs Author Groups",
         xaxis=dict(title="Author Group", ticks=""),
         yaxis=dict(title="Research Group", ticks=""),
-        xaxis_nticks=len(research_regions),  # Set the number of ticks on the x-axis
-        yaxis_nticks=len(research_regions),  # Set the number of ticks on the y-axis
+        xaxis_nticks=len(rgn.research_regions),  # Set the number of ticks on the x-axis
+        yaxis_nticks=len(rgn.research_regions),  # Set the number of ticks on the y-axis
         template="plotly_white",
         height=600,  # Set height and width to make it square
         width=1000,
@@ -411,124 +480,17 @@ def plot_heatmap(data_grouped):
     
     st.plotly_chart(fig)
     
-def plot_world_map(data_grouped, vulnerability, population):
-    data_pub = data_grouped[['Regions_updated', 'ResearchRegion', 'DOI', 'Altmetric']]
-    data_pub = data_pub.explode('Regions_updated')
-    data_pub = data_pub[~data_pub['Regions_updated'].isin(exclude_regions)]
-    data_pub = data_pub.groupby('Regions_updated').agg({'DOI': 'count', 'Altmetric': 'sum'}).reset_index()
-    data_pub.columns = ['Regions_updated', 'NumPublications', 'Altmetrics']
-    
-    # Load world map shapefile
-    world = gpd.read_file("config/shapefiles/ne_50m_admin_0_countries.shp")
-    world['Regions_updated'] = world['NAME'].apply(clean_regions)
-    world = world.explode('Regions_updated')
-    world = world.merge(vulnerability, on='Regions_updated', how='left')
-    world.loc[world['NAME'] == 'S. Sudan', 'VulnerabilityIndex'] = list(world.loc[world['NAME'] == 'Sudan', 
-                                                                                  'VulnerabilityIndex'])[0]
-    
-    world = world.merge(data_pub, on='Regions_updated', how='left')
-    world = world.merge(population, on='Regions_updated', how='left')
-    world['ResearchRegion'] = world['Regions_updated'].apply(get_singular_region)
-    
-    # Plot the world map with ND-GAIN Vulnerability Index
-    fig, ax = plt.subplots(1, 1, figsize=(26, 18))
-    
-    # Create the map with a color scheme for the vulnerability index
-    world.plot(column='VulnerabilityIndex', ax=ax, legend=True,
-               cmap='OrRd', missing_kwds={'color': 'white'},
-               legend_kwds={'label': "ND-GAIN Vulnerability Index",
-                            'orientation': "vertical",
-                            'shrink': 0.5, # Shrink the height of the legend
-                            'pad': 0.03})
-    
-    hatch_patterns = {'Annex1': '///', 'NonAnnex1': '...', 'LDC': '++', None:''}
-    
-    # Apply hatching based on ResearchRegion
-    for idx, row in world.iterrows():
-        category = row['ResearchRegion']
-        hatch = hatch_patterns.get(category, '')
-    
-        # Plot each country with the corresponding hatching pattern
-        world[world.index == idx].plot(
-            ax=ax,
-            color='none',  # No fill color, just hatch
-            hatch=hatch,
-            facecolor='darkgrey',
-            alpha=0.3
-        )
-    
-    # Define marker shapes for each category
-    markers = {
-        'Annex1': 'D',
-        'NonAnnex1': 's',
-        'LDC': '^',
-        'USA': 'P',
-        'India': 'X',
-        'China': '*',
-        'None': 'o'
-    }
-    
-    # Use a sequential colormap for the number of publications
-    cmap = plt.colormaps.get_cmap('Blues')  # You can choose other sequential colormaps like 'Reds', 'Greens', etc.
-    norm = Normalize(vmin=world['NumPublications'].min(), vmax=world['NumPublications'].max())  # Normalize publication counts
-    
-    # Add circles for publications, where size is based on population and color on normalized publication count
-    for idx, row in world.iterrows():
-        if pd.notna(row['NumPublications']):
-    
-            category = row['ResearchRegion']
-            marker = markers.get(category, 'o')  # Default to circle if not found
-    
-            # Get the color based on the number of publications
-            circle_color = cmap(norm(row['NumPublications']))
-    
-            ax.scatter(
-                row['geometry'].centroid.x,
-                row['geometry'].centroid.y,
-                s=row['Population'] / 1000000,  # Scale population for circle size
-                color=circle_color,  # Use color from the colormap
-                edgecolor='black',
-                alpha=0.7,
-                # marker=marker
-            )
-    
-    # Create colorbar to reflect the publication counts
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array(np.array(world['NumPublications']))  # Set array for ScalarMappable
-    
-    # Place the colorbar at the bottom, horizontally
-    # cbar = plt.colorbar(sm, ax=ax, orientation='horizontal', shrink=0.4, pad=0.05)  # 'pad' adjusts the distance from the map
-    cbar = plt.colorbar(sm, ax=ax, orientation='horizontal', shrink=0.5, pad=0.05)  # 'pad' adjusts the distance from the map
-    cbar.set_label('Number of Publications')  # Add label to the colorbar
-    
-    # Create custom legend handles for each hatch pattern
-    hatch_legend_handles = [
-        mpatches.Patch(facecolor='white', hatch=hatch, edgecolor='black', label=category)
-        for category, hatch in hatch_patterns.items() if hatch  # Exclude 'None' category or others without hatching
-    ]
-    
-    # Add the hatch legend to the plot
-    ax.legend(handles=hatch_legend_handles, title="UNFCCC Grouping", loc='lower right', frameon=True,
-        labelspacing=0.5,
-        borderpad=0.8,
-        handleheight=2.5,
-        handlelength=2.5)
-    
-    # Show the final plot
-    plt.title("Publications over the world with Vulnerability Index")
-    st.pyplot(fig)
-    
 def plot_interactive_world_map(data_grouped, vulnerability, population):
     
     data_pub = data_grouped[['Regions_updated', 'ResearchRegion', 'DOI', 'Altmetric']]
     data_pub = data_pub.explode('Regions_updated')
-    data_pub = data_pub[~data_pub['Regions_updated'].isin(exclude_regions)]
+    data_pub = data_pub[~data_pub['Regions_updated'].isin(rgn.exclude_regions)]
     data_pub = data_pub.groupby('Regions_updated').agg({'DOI': 'count', 'Altmetric': 'sum'}).reset_index()
     data_pub.columns = ['Regions_updated', 'NumPublications', 'Altmetrics']
     
     # Load world map shapefile
     world = gpd.read_file("config/shapefiles/ne_50m_admin_0_countries.shp")
-    world['Regions_updated'] = world['NAME'].apply(clean_regions)
+    world['Regions_updated'] = world['NAME'].apply(func.clean_regions)
     world = world.explode('Regions_updated')
     world = world.merge(vulnerability, on='Regions_updated', how='left')
     world.loc[world['NAME'] == 'S. Sudan', 'VulnerabilityIndex'] = list(world.loc[world['NAME'] == 'Sudan', 
@@ -536,26 +498,28 @@ def plot_interactive_world_map(data_grouped, vulnerability, population):
     
     world = world.merge(data_pub, on='Regions_updated', how='left')
     world = world.merge(population, on='Regions_updated', how='left')
-    world['ResearchRegion'] = world['Regions_updated'].apply(get_singular_region)
+    world['ResearchRegion'] = world['Regions_updated'].apply(func.get_singular_region)
 
-    world = world[world['VulnerabilityIndex'].isna() == False]
     world['NumPublications'] = world['NumPublications'].fillna(0)
     world['Population'] = world['Population'].fillna(0)
     
     fig = go.Figure()
     
+    world_vul = world[world['VulnerabilityIndex'].isna() == False]
+    world['VulnerabilityIndex'] = world['VulnerabilityIndex'].fillna(0)
+    
     # Create a list for the custom hover text
     world['hover_text'] = (
         "Country: " + world['Regions_updated'].str.title() +
-        "<br>Population: " + world['Population'].apply(lambda x: '{:,}'.format(x)) +
+        "<br>Population: " + world['Population'].apply(lambda x: '{:,}'.format(x) if x != 0 else 'NA') +
         "<br>Number of Publications: " + world['NumPublications'].astype(str) +
-        "<br>Vulnerability Index: " + world['VulnerabilityIndex'].apply(lambda x: '{:.3f}'.format(x)) +
-        "<br>UNFCCC Grouping: " + world['ResearchRegion'].astype(str)
+        "<br>Vulnerability Index: " + world['VulnerabilityIndex'].apply(lambda x: '{:.3f}'.format(x) if x != 0 else 'NA') +
+        "<br>UNFCCC Grouping: " + world['ResearchRegion'].apply(lambda x: x if x != '' else 'NA')
     )
     
     fig.add_trace(go.Choropleth(
-        locations=world['Regions_updated'],  # Match country names to Plotly's built-in geo map
-        z=world['VulnerabilityIndex'],
+        locations=world_vul['Regions_updated'],  # Match country names to Plotly's built-in geo map
+        z=world_vul['VulnerabilityIndex'],
         locationmode='country names',
         colorscale='YlOrRd',
         colorbar=dict(
@@ -567,7 +531,7 @@ def plot_interactive_world_map(data_grouped, vulnerability, population):
             x=1,  # Adjust position horizontally (closer to the map)
             y=0.5,  # Center vertically
         ),
-        hoverinfo='none'
+        hoverinfo='none',
     ))
     
     fig.update_layout(
@@ -600,12 +564,12 @@ def plot_interactive_world_map(data_grouped, vulnerability, population):
                 xanchor='center',  # Horizontal alignment of the colorbar
                 yanchor='top',
                 orientation='h',
-                len=0.6))))
-
+                len=0.8)
+            )
+        )
+        )
 
     st.plotly_chart(fig)
-
-    
     
 
 def main():
@@ -614,88 +578,192 @@ def main():
     population_data_path = "data/population_projection.csv"
     
     data = load_data(data_path)
-    vulnerability = read_vulnerability_data(vulnerability_data_path)
-    population = read_population_data(population_data_path)
+    vulnerability = func.read_vulnerability_data(vulnerability_data_path)
+    population = func.read_population_data(population_data_path)
     
     data_country_grouped = prepare_graph_data(data, vulnerability, population)
     
     st.title("Equity in Climate Change Research")
+    
 
-    st.sidebar.title("Select Graphs")
-    main_category = st.sidebar.selectbox("Choose a category:", 
-                                         ["Scatter Plots", "Region Plots", "Line Plots", "Other Plots"])
+    st.sidebar.title("Graphs")
+    st.sidebar.info("Use this menu to select the type of graph you'd like to view.")
     
+    main_category = st.sidebar.selectbox("Choose Graph:", 
+                                         ["Publication Analysis", "Citation Analysis", "Altmetric Analysis",
+                                          "Author Analysis"])
     
-    if main_category == "Scatter Plots":
-    
-        # Sidebar Navigation
-        nav_option = st.sidebar.radio(
-            "Select a graph to view:",
-            ("NumPublications vs Vulnerability", "NumPublications vs Population", "Altmetrics vs Vulnerability")
-        )
+    if main_category == "Publication Analysis":
+        nav_option = st.sidebar.radio("Select a graph to view:",
+                                        ("Publications Distributed over the World", 
+                                         "Publications of Countries with their Vulnerability", 
+                                         "Publications of Countries with their Population",
+                                         "Publication Distributed over Groups", 
+                                         "Population-Normalized Publication Distribution over Groups",
+                                         "Publication Distributed over Time",
+                                         "Publications Distributed over Research Journals"))
         
-        # Display the selected graph
-        if nav_option == "NumPublications vs Vulnerability":
-            plot_scatter(data_country_grouped, "VulnerabilityIndex", "NumPublications_sqrt")
-        elif nav_option == "NumPublications vs Population":
-            plot_scatter(data_country_grouped, "Population", "NumPublications_sqrt")
-        elif nav_option == "Altmetrics vs Vulnerability":
-            plot_scatter(data_country_grouped, "VulnerabilityIndex", "Altmetrics_sqrt")
+        if nav_option == "Publications Distributed over the World":
+            plot_interactive_world_map(data, vulnerability, population)
             
-    elif main_category == "Region Plots":
-    
-        # Sidebar Navigation
-        nav_option = st.sidebar.radio(
-            "Select a graph to view:",
-            ("NumPublications", "Citations", "Altmetrics", "Authors")
-        )
-        
-        # Display the selected graph
-        if nav_option == "NumPublications":
+            st.subheader("How the plot works")
+            st.write(tc.world_map_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.world_map_takeaway)
+                     
+        elif nav_option == "Publications of Countries with their Vulnerability":
+            plot_scatter(data_country_grouped, "VulnerabilityIndex", "NumPublications_sqrt", "NumPublications")
+            
+            st.subheader("How the plot works")
+            st.write(tc.publication_vs_vulnerability_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.publication_vs_vulnerability_takeaway)
+            
+        elif nav_option == "Publications of Countries with their Population":
+            plot_scatter(data_country_grouped, "Population", "NumPublications_sqrt", "NumPublications")
+            
+            st.subheader("How the plot works")
+            st.write(tc.publication_vs_population_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.publication_vs_population_takeaway)
+            
+        elif nav_option == "Publication Distributed over Groups":
             plot_bar(data, 'DOI', 'count', "Publication")
-        elif nav_option == "Citations":
+            
+            st.subheader("How the plot works")
+            st.write(tc.region_wise_publication_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.region_wise_publication_takeaway)
+            
+        elif nav_option == "Population-Normalized Publication Distribution over Groups":
+            plot_normalised_bar_plot(data_country_grouped)
+            
+            st.subheader("How the plot works")
+            st.write(tc.norm_region_wise_publication_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.norm_region_wise_publication_takeaway)
+            
+        elif nav_option == "Publication Distributed over Time":
+            plot_line(data, 'DOI', 'count', 'Publications')
+            
+            st.subheader("How the plot works")
+            st.write(tc.year_wise_publication_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.year_wise_publication_takeaway)
+            
+        elif nav_option == "Publications Distributed over Research Journals":
+            plot_grouped_bar(data)
+
+            st.subheader("How the plot works")
+            st.write(tc.journal_wise_publication_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.journal_wise_publication_takeaway)
+            
+    elif main_category == "Citation Analysis":
+        nav_option = st.sidebar.radio("Select a graph to view:",
+                                        ("Citations Distributed over Groups", "Citations Distributed over Time",
+                                         "Cumulative Citations Distributed over Time"))
+        
+        if nav_option == "Citations Distributed over Groups":
             plot_bar(data, 'Citation', 'sum', "Citations")
-        elif nav_option == "Altmetrics":
+            
+            st.subheader("How the plot works")
+            st.write(tc.region_wise_citation_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.region_wise_citation_takeaway)
+            
+        elif nav_option == "Citations Distributed over Time":
+            plot_line(data, 'Citation', 'sum', 'Citations')
+            
+            st.subheader("How the plot works")
+            st.write(tc.year_wise_citation_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.year_wise_citation_takeaway)
+            
+        elif nav_option == "Cumulative Citations Distributed over Time":
+            plot_line(data, 'Citation', 'sum', 'Cumulative Citations')
+            
+            st.subheader("How the plot works")
+            st.write(tc.cumulative_year_wise_citation_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.cumulative_year_wise_citation_takeaway)
+            
+    elif main_category == "Altmetric Analysis":
+        nav_option = st.sidebar.radio("Select a graph to view:",
+                                        ("Altmetrics Distributed over Groups", 
+                                         "Altmetrics Distributed over Time",
+                                         "Altmetrics of Countries with their Vulnerability"))
+        
+        if nav_option == "Altmetrics Distributed over Groups":
             plot_bar(data, 'Altmetric', 'sum', "Altmetrics")
-        elif nav_option == "Authors":
+            
+            st.subheader("How the plot works")
+            st.write(tc.region_wise_altmetric_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.region_wise_altmetric_takeaway)
+            
+        elif nav_option == "Altmetrics Distributed over Time":
+            plot_line(data, 'Altmetric', 'sum', "Altmetrics")
+            
+            st.subheader("How the plot works")
+            st.write(tc.year_wise_altmetric_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.year_wise_altmetric_takeaway)
+            
+        elif nav_option == "Altmetrics of Countries with their Vulnerability":
+            plot_scatter(data_country_grouped, "VulnerabilityIndex", "Altmetrics_sqrt", "Altmetrics")
+            
+            st.subheader("How the plot works")
+            st.write(tc.altmetric_vs_vulnerability_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.altmetric_vs_vulnerability_takeaway)
+            
+    elif main_category == "Author Analysis":
+        nav_option = st.sidebar.radio("Select a graph to view:",
+                                        ("Number of Authors Distributed over Groups", 
+                                         "Number of Authors Distributed over Time",
+                                         "Author Correlation with Groups"))
+        
+        if nav_option == "Number of Authors Distributed over Groups":
             plot_bar(data, 'Author', 'sum', 'Author')
             
-    elif main_category == 'Line Plots':
-        
-        # Sidebar Navigation
-        nav_option = st.sidebar.radio(
-            "Select a graph to view:",
-            ("NumPublications", "Citations", "Cumulative Citations", "Altmetrics", "Authors")
-        )
-        
-        # Display the selected graph
-        if nav_option == "NumPublications":
-            plot_line(data, 'DOI', 'count', 'Publications')
-        elif nav_option == "Citations":
-            plot_line(data, 'Citation', 'sum', 'Citations')
-        elif nav_option == "Cumulative Citations":
-            plot_line(data, 'Citation', 'sum', 'Cumulative Citations')
-        elif nav_option == "Altmetrics":
-            plot_line(data, 'Altmetric', 'sum', "Altmetrics")
-        elif nav_option == "Authors":
-            plot_line(data, 'Authors', 'sum', "Authors")
+            st.subheader("How the plot works")
+            st.write(tc.region_wise_author_working)
             
-    elif main_category == "Other Plots":
-        
-        # Sidebar Navigation
-        nav_option = st.sidebar.radio(
-            "Select a graph to view:",
-            ("Author Heatmaps", "Journal Distribution", "World Map")
-        )
-        
-        if nav_option == "Journal Distribution":
-            plot_grouped_bar(data)
-        elif nav_option == "Author Heatmaps":
+            st.header("Key Takeaways")
+            st.write(tc.region_wise_author_takeaway)
+            
+        elif nav_option == "Number of Authors Distributed over Time":
+           plot_line(data, 'Authors', 'sum', "Authors")
+           
+           st.subheader("How the plot works")
+           st.write(tc.year_wise_author_working)
+           
+           st.header("Key Takeaways")
+           st.write(tc.year_wise_author_takeaway)
+            
+        elif nav_option == "Author Correlation with Groups":
             plot_heatmap(data)
-        elif nav_option == "World Map":
-            plot_interactive_world_map(data, vulnerability, population)
-
-    
+            
+            st.subheader("How the plot works")
+            st.write(tc.heatmap_author_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.heatmap_author_takeaway)
+            
     
     
 if __name__ == "__main__":
