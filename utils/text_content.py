@@ -19,16 +19,16 @@ world_map_working = """World Map shows countries with their ND-GAIN Vulnerabilit
         \n**Interact with the map:** Users can zoom over the map and use the hover functionatlity 
         to get all information about any particular country."""
                        
-world_map_takeaway = """The most vulnerable countries are the focus of the fewest publications in the top-tier,
+world_map_takeaway = """The most climate-vulnerable countries are the focus of the fewest publications in the top-tier,
          high-impact journals analyzed in our dataset. Countries across Africa are particularly 
          under-represented in high-impact climate change research given that many are among 
-         the highest vulnerability indexes and/or fall under the UN LDC grouping. In fact, 
+         the most vulnerable and/or fall under the UN LDC grouping. In fact, 
          many African countries have zero publications (shown as a lack of blue circles). 
          \nIn contrast, Annex-1 countries that display the least vulnerability 
-         (at the national level) feature as the domain of focus in a relatively high number of 
-         publications. This is especially true of the USA which contains more publications in 
-         these top-tier, high-impact journals than any other country in the dataset (can be seen
-         by the deep blue colour). China and India had the next highest publication totals, 
+         are the focus of a relatively high number of publications.
+         This is especially true of the USA which contains more publications in 
+         these top-tier, high-impact journals than any other country in the dataset (denoted
+         by the dark blue colour). China and India had the next highest publication totals, 
          and both display higher vulnerability than the USA."""
          
 # ------------------------------------------------------------------------------------------------------
@@ -46,9 +46,9 @@ publication_vs_vulnerability_working = """The scatter plot shows countries as bu
          and use the hover functionatlity over any bubble to get all information
          about the particular country. To zoom out, double-click on the plot."""
          
-publication_vs_vulnerability_takeaway = """USA pops out in the plot with the highest number of publications 
-          while having a lower Vulnerability Index. At the same time, China and India have a high 
-          publications too, but their Vulnerability Index is much higher compared to the USA. 
+publication_vs_vulnerability_takeaway = """USA has the highest number of publications 
+          while having a lower Vulnerability Index. While China and India also have a relatively high 
+          number of publications, their Vulnerability Index is much higher compared to the USA. 
           USA-focused publications still dominate the dataset even when normalized by population. 
           \nKeeping these anomalies aside, we see most of the Annex-1 countries scattered amongst 
           lower Vulnerability Index and many of them have a higher number of publication in contrast
@@ -91,7 +91,7 @@ region_wise_publication_working = """The bar plot shows overall publication coun
           \n**Interact with the plot:** Users can use the hover functionatlity over any bar to 
           get all information about the particular country or group."""
           
-region_wise_publication_takeaway = """At first glance, we can see that the number of publications are comparable berween 
+region_wise_publication_takeaway = """At first glance, we can see that the number of publications are comparable between 
          Annex-1 and nonAnnex-1 countries. In aggregate, Annex-1 countries were the focus of the 
          similar number of studies in top tier, high-impact journals (across our dataset) as 
          nonAnnex-1 countries, while the UN LDC grouping was the focus of fewer than 20% of the 
@@ -153,7 +153,7 @@ journal_wise_publication_working = """The grouped bar plot shows top-tier resear
          get all information about the particular country, group or journal. Users can also
          zoom into the graph by using the crop functionality. To zoom out, double-click on the plot."""
          
-journal_wise_publication_takeaway = """Most of the top-tier journals publish studies whose foci are 
+journal_wise_publication_takeaway = """Most of the top-tier journals publish studies whose geographic foci are 
          distributed similarly  cross the various countries and country groupings. Nature and 
          Nature Climate Change tend to publish more studies focused on Annex-1 regions as a percentage 
          of their total climate change publications (included in our dataset) relative to all other 
@@ -177,7 +177,7 @@ region_wise_citation_takeaway = """Citations show a research publication's outre
          and can be a useful trend to study for estimating impact of climate change research. 
          The total number of citations are essentially the sum total of citations across all research articles
          published per group in our time-frame, and these numbers seem comparable between Annex-1 and
-         nonAnnex-1 countries, but much lower for the more vu;nerable LDC countries, implying that the 
+         nonAnnex-1 countries, but much lower for the more vulnerable LDC countries, implying that the 
          research articles published on these vulnerable regions don't get cited enough when compared to 
          research articles published on annex-1 or nonAnnex-1 groups. The citation totals for USA alone exceed
          more than the LDC group countries. """
@@ -339,7 +339,7 @@ year_wise_author_takeaway = """Authors of these studies overwhelmingly hail from
           largely driven by authors affiliated with Chinese institutions, which also display similar sharp 
           increases over this period. While publications from authors affiliated with USA institutions are 
           also rising, a marked decline is present from ~2020-2022. Authors affiliated with Indian 
-          institutions are also increasing at the end of the timeseries, albeit modestly, while worryingly 
+          institutions are also increasing at the end of the timeseries, albeit modestly, while  
           authors from LDC countries appear to have declined in 2022. """
           
 # ------------------------------------------------------------------------------------------------------
