@@ -317,10 +317,10 @@ region_wise_author_takeaway = """In addition to investigating what countries and
           this research. We attempt this by evaluating author affiliation by country, using the bibliographic 
           information for each of the studies in our dataset. Most authors on the high-impact studies in our 
           dataset are affiliated with institutions based in Annex-1 countries, ~75% of our dataset, rather 
-          than nonAnnex1. These results are also strongly significant (p =2.47e-08), with a relatively 
-          large effect size (0.67) and high power (0.93). Again, the USA alone has more authors than all 
-          of the nonAnnex-1 countries combined. China also displays a large number of authors, more so 
-          than the LDC grouping.  """ 
+          than nonAnnex1. Authors affiliated with USA outweight the total authors affiliated with non-Annex1
+          countries and especially LDC countries by a huge margin. This shows disproportion in the spread of
+          authors and can direct attention to the research published on nonAnnex-1 could be dominated
+          by Annex-1 authors. """ 
           
 # ------------------------------------------------------------------------------------------------------
 # Year-wise Overall Author Count
@@ -354,6 +354,8 @@ heatmap_author_working = """This chart represents a correlation matrix to indica
           displayed as the total number of interactions between Author and Research Groups. For example, a 
           research article based on USA could have 5 authors from Annex-1 country and 2 from nonAnnex-1 
           countries, and these counts would respectively add to (Annex-1, USA) and (nonAnnex-1, USA).
+          This is why even though the number of authors of a group are low, the interactions with articles
+          explode the numbers to show their strength of correlation.
           \n**Interact with the plot:** Hovering over each cell shows the cross-section of (Author Region, 
           Research Region). """
 
@@ -372,7 +374,224 @@ heatmap_author_takeaway = """To address the specific question of “who is focus
           \nIt is also interesting to note that when we look at nonAnnex-1 studies, the Annex-1 authors and 
           specifically USA-affiliated authors dominate the publications in comparison to authors affiliated 
           with nonAnnex-1 group themselves. Similar trend can be seen for LDC group publications as well."""
+          
+# ------------------------------------------------------------------------------------------------------
+# Country-Wise for Overall Publications
+# ------------------------------------------------------------------------------------------------------
          
+country_wise_publication_working = """The bar chart shows number of publications per country over our entire timeframe
+          (2011-2023). These numbers are calculated by considering which countries are being talked about in
+          a research publication. Therefore, the total number of research publications that talk about a 
+          particular country are added up to find the total publications per country.
+          \n**Note:** Unique number of publications are counted, i.e. if a publication mentioned a country
+          more than once, the article is still counted only once.
+          \n**Interact with the plot:** Users can use the hover functionality over any bar to 
+          get all information about the country along with their number of publications. Users
+          can also zoom over the plot by using the crop functionality on any portion of the plot. To zoom out,
+          simply double-click on the plot."""
+          
+country_wise_publication_takeaway = """The number of publications is heavily skewed, with most of the countries
+          towards the right having publication numbers almost equal to 0. USA dominates heavily with more than
+          400 publications. China is next, which is a nonAnnex-1 country. This is indicative of how research 
+          publications may center mostly around USA and other developed nations in comparison to nonAnnex-1
+          and especially LDC countries. """
+          
+# ------------------------------------------------------------------------------------------------------
+# Country-Wise for Overall Citations
+# ------------------------------------------------------------------------------------------------------
+         
+country_wise_citations_working = """The bar chart shows total citations per country over our entire timeframe
+          (2011-2023). These numbers are calculated by considering which countries are being talked about in
+          a research publications. Therefore, the citations from these research publications that talk about a 
+          particular country are added up to find the total citations per country.
+          \n**Note:** Unique number of publications are considered, i.e. if a publication mentioned a country
+          more than once, the article is still counted only once, and so its citations are summed up only once.
+          \n**Interact with the plot:** Users can use the hover functionality over any bar to 
+          get all information about the country along with their total citations. Users
+          can also zoom over the plot by using the crop functionality on any portion of the plot. To zoom out,
+          simply double-click on the plot."""
+          
+country_wise_citations_takeaway = """The total citations, which measure the scientific reach of research articles
+          are heavily skewed, with most of the countries towards the right having citation numbers almost equal 
+          to 0. USA dominates this heavily with more citations than any other country. 
+          China is next, which is a nonAnnex-1 country. This is indicative of how research publications 
+          about the USA may be cited more frequently in comparison to nonAnnex-1 and especially LDC countries. """
+          
+# ------------------------------------------------------------------------------------------------------
+# Country-Wise for Overall Altmetrics
+# ------------------------------------------------------------------------------------------------------
+         
+country_wise_altmetrics_working = """The bar chart shows total altmetrics per country over our entire timeframe
+          (2011-2023). These numbers are calculated by considering which countries are being talked about in
+          a research publications. Therefore, the altmetrics from these research publications that talk about a 
+          particular country are added up to find the total altmetrics per country.
+          \n**Note:** Unique number of publications are considered, i.e. if a publication mentioned a country
+          more than once, the article is still counted only once, and so its altmetrics are summed up only once.
+          \n**Interact with the plot:** Users can use the hover functionality over any bar to 
+          get all information about the country along with their total altmetrics. Users
+          can also zoom over the plot by using the crop functionality on any portion of the plot. To zoom out,
+          simply double-click on the plot."""
+          
+country_wise_altmetrics_takeaway = """The total altmetrics can be useful to measure the media outreach and 
+          attention that an article receives. The total almetric numbers for countries are heavily skewed, 
+          with most of the countries towards the right having altmetrics numbers almost equal to 0. 
+          USA dominates the plot heavily with more altmetrics than any other country. 
+          China is next, which is a nonAnnex-1 country. This could incidicate the popular research publications 
+          garnering more media attention to center on USA and other developed nations in 
+          comparison to nonAnnex-1 and especially LDC countries. """
+          
+# ------------------------------------------------------------------------------------------------------
+# Country-Wise for Overall Authors
+# ------------------------------------------------------------------------------------------------------
+         
+country_wise_authors_working = """The bar chart shows total number of authors per country over our entire timeframe
+          (2011-2023). These numbers are calculated by considering the country an author's affiliated institution
+          belongs to, and this is followed for each author of a particular publication. Therefore, the 
+          total number of authors affiliated with a particular country are added up to find the 
+          total authors per country.
+          \n**Note:** Unique number of publications are considered, i.e. if a publication mentioned a country
+          more than once, the article is still counted only once, and so its authors are summed up only once.
+          \n**Interact with the plot:** Users can use the hover functionality over any bar to 
+          get all information about the country along with their total number of authors. Users
+          can also zoom over the plot by using the crop functionality on any portion of the plot. To zoom out,
+          simply double-click on the plot."""
+          
+country_wise_authors_takeaway = """The total number of authors (authors include all the authors of a publication
+          and not just the first-author) are heavily skewed, with most of the countries
+          towards the right having author numbers almost equal to 0. USA dominates this heavily with more 
+          authors than any other country. China is next, which is a nonAnnex-1 country. 
+          This is indicative of how most of the research authors are affiliated with USA 
+          and other developed nations in comparison to nonAnnex-1 and especially LDC countries. """
+          
+# ------------------------------------------------------------------------------------------------------
+# Year-wise Normalised Cumulative Citations
+# ------------------------------------------------------------------------------------------------------
+
+norm_cumulative_year_wise_citation_working = """The line chart shows the cumulative number of citations normalised
+          by the cumulative total number of publications per group over our entire timeframe (2011-2023). 
+          USA, China and India are represented by dash lines as special case studies of these groups. 
+          For a given marker, the normalised cumulative number of citations refers 
+          to the sum total citations of all the research articles published on countries belonging to the UNFCCC 
+          group, divided by the total number of publications in the same group for the given period. 
+          This citation sum for a period is calculated cumulatively, i.e. as a running total from the initial year 
+          (i.e. 2011) to the current year, and the number of publications are calculated in a similar way.
+          \n**Interact with the plot:** Users can use the hover functionality over any marker to 
+          get all information about the group at that given year. The crop functionality can also be used to
+          zoom into any portion of the graph. To zoom-out, double-click anywhere on the graph."""
+          
+norm_cumulative_year_wise_citation_takeaway = """The normalised cumulative number of citations provide a 
+          comparable way to  study trend lines for the UNFCCC groupings and special case countries. 
+          Citations are sensitive to the number of studies: groupings/countries with a larger number of 
+          studies would likely receive more citations overall (even if the citation/manuscript were 
+          relatively low). This can make a direct comparison of total citations among groups challenging. 
+          However when normalized by the cumulative total number of publications by year, the annual 
+          cumulative citations across groupings and countries are, interestingly, mostly comparable. 
+          China and India have huge spikes in the year 2013, indiciating that the citations were pretty high
+          when compared to the total research publications about these countries during this time frame.
+          We also see an overall decline trend for all the groups and countries, which pertains to the 
+          increase in publications used for normalisation in comparison to the increase in citations, since
+          the citations on recent publications wouln't have had enough opportunity to accumulate yet.""" 
+
+# ------------------------------------------------------------------------------------------------------
+# Year-wise Normalised Altmetrics
+# ------------------------------------------------------------------------------------------------------
+         
+norm_year_wise_altmetric_working = """The line chart shows the total sum of Altmetric Scores per group normalised 
+          by the total number of publications of that group over our entire timeframe (2011-2023). 
+          USA, China and India are represented by dash lines as special case studies
+          of these groups. 
+          For a given marker, the 'Normalised Altmetrics' refers to the sum total Altmetric Scores
+          of all the research articles published on countries belonging to a UNFCCC group for the current year,
+          divided by the total number pf publications of that UNFCCC group in that year.
+          \n**Interact with the plot:** Users can use the hover functionality over any marker to 
+          get all information about the group at that given year. The crop functionality can also be used to
+          zoom into any portion of the graph. To zoom-out, double-click anywhere on the graph."""
+
+norm_year_wise_altmetric_takeaway = """Altmetric scores measure outreach of a research publication using 
+         non-traditional sources like social media, news, blogs and so on. They form a measure of the
+         instantaneous attention that publications receive and therefore form an interesting comparative metric.
+         Altmetrics, however, can be skewed by the number of studies: groupings/countries with a larger 
+         number of studies would have more opportunity to garner more media attention overall (even if the 
+         altmetric/manuscript were relatively low). This can make a direct comparison of total altmetrics 
+         among groups challenging. When normalized by the total number of publications in a given year, the
+         annual altmetris distribution is haphazhard, although we can see a more-or-less linear trend. 
+         For several years, its interesting to note the opposite trends in USA and LDC countries. The recent
+         years show peaks in non-Annex1 and especially LDC-focussed research. USA and Annex-1 countries
+         maintain overall trends, whereas India and China have seen decline in the recent years compared to
+         their peak timeframes. """
+         
+# ------------------------------------------------------------------------------------------------------
+# Region-wise Normalised Citations Count
+# ------------------------------------------------------------------------------------------------------
+
+norm_region_wise_citation_working = """The bar plot shows total citations of research articles
+          for each UNFCCC Grouping normalised with the total number of publications of that UNFCCC group,
+          along with special case studies for USA, China and India.
+          The normalised citation sum is calculated by summing up all citations of each research article and 
+          aggregate it over UNFCCC group, and dividing it by the total number of publications of the group.
+          \n**Interact with the plot:** Users can use the hover functionality over any bar to 
+          get all information about the particular country or group."""
+          
+norm_region_wise_citation_takeaway = """The normalised cumulative number of citations provide a 
+          comparehensive way to compare UNFCCC groupings and special case countries. 
+          Citations are sensitive to the number of studies: groupings/countries with a larger number of 
+          studies would likely receive more citations overall (even if the citation/manuscript were 
+          relatively low). This can make a direct comparison of total citations among groups challenging. 
+          However when normalized by the cumulative total number of publications by year, the overall 
+          cumulative citations across groupings and countries are, interestingly, mostly comparable. 
+          China and India in this case show normalized cumulative citations that are higher than the 
+          other groupings and countries, such that each top-tier paper focused on those contexts
+          may receive more citations relative to other countries and groupings. This could indiciate
+          that the research published by regions is more-or-less comparable when it comes to being cited,
+          provided we normalise by the rate with which the countries / groups publish articles.""" 
+          
+# ------------------------------------------------------------------------------------------------------
+# Region-wise Normalised Altmetrics Count
+# ------------------------------------------------------------------------------------------------------
+
+norm_region_wise_altmetric_working = """The bar plot shows total altmetrics of research articles
+          for each UNFCCC Grouping normalised with the total number of publications of that UNFCCC group,
+          along with special case studies for USA, China and India.
+          The normalised altmetrics sum is calculated by summing up all altmetrics of each research article and 
+          aggregate it over UNFCCC group, and dividing it by the total number of publications of the group.
+          \n**Interact with the plot:** Users can use the hover functionality over any bar to 
+          get all information about the particular country or group."""
+          
+norm_region_wise_altmetric_takeaway = """Altmetrics can be skewed by the number of studies: groupings/countries 
+          with a larger number of studies would have more opportunity to garner more media attention overall 
+          (even if the altmetric/manuscript were relatively low). This can make a direct comparison of total 
+          altmetrics among groups challenging. When normalized by the total number of publications, 
+          studies focused on Annex-1 countries show a higher total Altmetrics/publication than nonAnnex-1.
+          However, the subset of studies focused on LDCs alone show higher total Altmetrics/publication than 
+          those focused on Annex-1. The USA alone, however, shows the highest Altmetrics per publication 
+          compared to any of the UNFCCC groupings, China, and India. This could indicate that the studies
+          receiving highest media attention are the ones that center around USA when we account for the
+          number of publications and compare with other UNFCCC groups, India and China.""" 
+
+# ------------------------------------------------------------------------------------------------------
+# Region-wise Population-Normalised Author Count
+# ------------------------------------------------------------------------------------------------------
+
+norm_region_wise_author_working = """The bar plot shows total count of authors of research articles
+          for each UNFCCC Grouping normalised with the total population of that UNFCCC group,
+          along with special case studies for USA, China and India.
+          The normalised count of authors is calculated by counting all authors (including
+          corresponding authors) of each research article and aggregate it over UNFCCC group, dividing it
+          by the total population of all countries in our database falling under that UNFCCC group.
+          \n**Interact with the plot:** Users can use the hover functionality over any bar to 
+          get all information about the particular country or group."""
+          
+norm_region_wise_author_takeaway = """One could argue that countries with more population have more opportunity 
+          to publish research in terms of number of authors. Hence, we create a population-normalised plot where
+          the total number of authors are compared after being normalised by the population of the UNFCCC group.
+          When normalized by population, we find that the more populous countries, India and China, have the 
+          fewest author-to-population ratios relative to the USA. Further, the Annex-1 author-to-population 
+          ratio is substantially higher than that of the nonAnnex-1 or LDC groupings. These normalized results 
+          are also strongly significant (p =2.47e-08), with a relatively large effect size (0.67) and high 
+          power (0.93). Whe it comes to USA, it towers overwhelmingly over the entire nonAnnex-1 and LDC groups,
+          as well as China and India. This shows that even when normalised by population, USA has more number of 
+          authors affiliated than any other country or region, which brings light to the disproportion 
+          in the spread of authors and the lack of regional authors in non-Annex1 and LDC countries.""" 
          
          
          

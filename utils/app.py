@@ -88,7 +88,15 @@ def plot_bar(data_grouped, col, agg_func, col_name):
               if 'China' in region:
                 china_count += 1
                 
-        counts = [annex1_count, non_annex1_count, ldc_count, usa_count, india_count, china_count]
+        counts = [annex1_count, non_annex1_count, ldc_count, usa_count, china_count, india_count]
+        
+    elif 'Normalised' in col_name:
+        
+        counts = [
+            getattr(data_grouped[data_grouped['ResearchRegion'].apply(lambda x: cat in x)][col], agg_func)() / 
+            getattr(data_grouped[data_grouped['ResearchRegion'].apply(lambda x: cat in x)]['DOI'], 'count')()
+            for cat in categories
+        ]
     
     else:
         counts = [
@@ -182,6 +190,20 @@ def plot_line(data_grouped, col, agg_func, col_name):
             })
             plot_data.append(region_counts)
         
+    elif "Normalised" in col_name:
+        # Group data by year and research region
+        for research_region in research_regions:
+            counts_col = (data_grouped[data_grouped['ResearchRegion'].apply(lambda x: research_region in x)]
+                          .groupby('Year Published')[col].agg(agg_func))
+            if 'Cumulative Citations' in col_name:
+                counts_col['Count'] = counts_col.reset_index(name='Count')['Count'].cumsum()
+            counts_pub = (data_grouped[data_grouped['ResearchRegion'].apply(lambda x: research_region in x)]
+                          .groupby('Year Published')['DOI'].agg('count'))
+            counts = counts_col / counts_pub
+            counts = counts.reset_index(name='Count')
+            counts['ResearchRegion'] = research_region
+            plot_data.append(counts)
+    
     else:
     
         # Group data by year and research region
@@ -241,6 +263,59 @@ def plot_line(data_grouped, col, agg_func, col_name):
     fig.for_each_trace(lambda trace: trace.update(name=trace.name.split(",")[0], showlegend=True,
                                                   mode='lines+markers'))
     
+    st.plotly_chart(fig)
+    
+    
+def plot_narrow_bar(data_grouped, y_col, col_name, agg_func):
+    
+    if y_col == "Authors":
+        data_grouped['AuthorCountry'] = data_grouped['AuthorCountry'].apply(ast.literal_eval)
+      
+        country_counter = defaultdict(int)
+        for author_dict in data_grouped['AuthorCountry']:
+          for author, country in author_dict.items():
+            if country:
+              country = func.clean_regions(country)[0]
+              if country in rgn.region_check_list_lower and country not in rgn.exclude_regions:
+                country_counter[country] += 1
+        country_counter = dict(sorted(country_counter.items(), key=lambda x: x[1], reverse=True))
+        countries = [country.title() for country in country_counter.keys()]
+        counts = list(country_counter.values())
+    
+    else:
+        country_data = data_grouped[['Regions_updated', y_col]]
+        country_data = country_data.explode(['Regions_updated'])
+        country_data = country_data[~country_data['Regions_updated'].isin(rgn.exclude_regions)]
+        all_country_data = country_data.groupby('Regions_updated')[y_col].agg(agg_func).sort_values(ascending=False)
+        countries = all_country_data.index.str.title()
+        counts = all_country_data.values
+    
+    # Create Plotly bar chart
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=countries, 
+                y=counts, 
+                #marker=dict(color='lightskyblue'),
+                width=0.5  # Width of bars (similar to Matplotlib)
+            )
+        ]
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title='Total ' + col_name + ' per Country',
+        xaxis_title='Countries',
+        yaxis_title='Total ' + col_name,
+        #xaxis=dict(tickangle=90),  # Rotate x-axis labels
+        #yaxis=dict(range=[0, 50000]),  # Set y-axis limits
+        #height=500,  # Set figure height
+        #width=1200,  # Set figure width
+        bargap=0.1,  # Space between bars
+        #grid=dict(yaxis=dict(color='#e3e3e3', width=0.5)),  # Grid style
+    )
+    
+    # Show plot
     st.plotly_chart(fig)
     
 
@@ -339,6 +414,79 @@ def plot_normalised_bar_plot(data_country_grouped):
         legend_title_text='Grouping',
         xaxis_title='Group / Country',
         yaxis_title='Normalised Number of Publications',
+        yaxis=dict(gridcolor='#e3e3e3', tickformat='.1f'),
+        plot_bgcolor='white',
+        annotations=[
+            # Add a text annotation to indicate the scale is in 10⁻⁶
+            dict(
+                x=0,  # Positioning the annotation in the center
+                y=1.05,  # Slightly above the plot
+                xref="paper",
+                yref="paper",
+                text="Scale: 10⁻⁶",  # Scale information
+                showarrow=False,
+                font=dict(size=12, color='grey'),
+            )
+        ]
+    )
+    
+    st.plotly_chart(fig)
+    
+def normalised_bar_plot_author(data_grouped, population):
+    data_grouped['AuthorCountry'] = data_grouped['AuthorCountry'].apply(ast.literal_eval)
+    country_counter = defaultdict(int)
+    for author_dict in data_grouped['AuthorCountry']:
+      for author, country in author_dict.items():
+        if country:
+          country = func.clean_regions(country)[0]
+          if country in rgn.region_check_list_lower and country not in rgn.exclude_regions:
+            country_counter[country] += 1
+    country_counter = dict(sorted(country_counter.items(), key=lambda x: x[1], reverse=True))
+    
+    df_author = pd.DataFrame(list(country_counter.items()), columns=['Regions_updated', 'Author_count'])
+    df_author = pd.merge(df_author, population, on='Regions_updated', how='left')
+    
+    df_author = df_author[df_author['Population'].isna() == False]
+    df_author['ResearchRegion'] = df_author['Regions_updated'].apply(func.get_research_region)
+    df_author = df_author.explode('ResearchRegion')
+    df_author['NormalisedAuthorCount'] = df_author['Author_count'] / df_author['Population']
+
+    region_order = ['Annex1', 'NonAnnex1', 'LDC', 'USA', 'China', 'India']
+    region_vals = [df_author.loc[df_author['ResearchRegion'] == region, 'NormalisedAuthorCount'].values[0]
+                    for region in region_order]
+    region_vals_scaled = [val * 1e6 for val in region_vals]
+    
+    groupings = ['Region', 'Region', 'Region', 'Country', 'Country', 'Country']
+
+    # Create a DataFrame
+    plot_data = pd.DataFrame({
+        'Category': region_order,
+        'Count': region_vals_scaled,
+        'Grouping': groupings
+    })
+    
+    plot_data['Normalised Author Counts'] = plot_data['Count'].apply(lambda x: f"{x:.2f} x 10⁻⁶")
+    
+    # Plot using Plotly Express
+    fig = px.bar(
+        plot_data,
+        x='Category',
+        y='Count',
+        color='Grouping',
+        title='Population-Normalised Author Distribution for UNFCCC Groupings',
+        labels={'Category': 'UNFCCC Grouping', 'Count': 'Normalised Author Counts'},
+        color_discrete_map={'Region': 'steelblue', 'Country': 'lightcoral'},
+        hover_data = {
+            'Grouping': False,
+            'Normalised Author Counts': True,
+        }
+    )
+    
+    # Customize layout
+    fig.update_layout(
+        legend_title_text='Grouping',
+        xaxis_title='Group / Country',
+        yaxis_title='Normalised Author Counts',
         yaxis=dict(gridcolor='#e3e3e3', tickformat='.1f'),
         plot_bgcolor='white',
         annotations=[
@@ -601,7 +749,8 @@ def main():
                                          "Publication Distributed over Groups", 
                                          "Population-Normalized Publication Distribution over Groups",
                                          "Publication Distributed over Time",
-                                         "Publications Distributed over Research Journals"))
+                                         "Publications Distributed over Research Journals",
+                                         "Publications Distributed over Countries"))
         
         if nav_option == "Publications Distributed over the World":
             plot_interactive_world_map(data, vulnerability, population)
@@ -666,10 +815,23 @@ def main():
             st.header("Key Takeaways")
             st.write(tc.journal_wise_publication_takeaway)
             
+        elif nav_option == "Publications Distributed over Countries":
+            plot_narrow_bar(data, "DOI", "Publications", "count")
+            
+            st.subheader("How the plot works")
+            st.write(tc.country_wise_publication_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.country_wise_publication_takeaway)
+            
     elif main_category == "Citation Analysis":
         nav_option = st.sidebar.radio("Select a graph to view:",
-                                        ("Citations Distributed over Groups", "Citations Distributed over Time",
-                                         "Cumulative Citations Distributed over Time"))
+                                        ("Citations Distributed over Groups", 
+                                         "Normalised Citations Distributed over Groups",
+                                         "Citations Distributed over Time",
+                                         "Cumulative Citations Distributed over Time",
+                                         "Normalised Cumulative Citations Distributed over Time",
+                                         "Citations Distributed over Countries"))
         
         if nav_option == "Citations Distributed over Groups":
             plot_bar(data, 'Citation', 'sum', "Citations")
@@ -679,6 +841,15 @@ def main():
             
             st.header("Key Takeaways")
             st.write(tc.region_wise_citation_takeaway)
+            
+        elif nav_option == "Normalised Citations Distributed over Groups":
+            plot_bar(data, 'Citation', 'sum', "Normalised Citations")
+            
+            st.subheader("How the plot works")
+            st.write(tc.norm_region_wise_citation_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.norm_region_wise_citation_takeaway)
             
         elif nav_option == "Citations Distributed over Time":
             plot_line(data, 'Citation', 'sum', 'Citations')
@@ -698,10 +869,31 @@ def main():
             st.header("Key Takeaways")
             st.write(tc.cumulative_year_wise_citation_takeaway)
             
+        elif nav_option == "Normalised Cumulative Citations Distributed over Time":
+            plot_line(data, 'Citation', 'sum', 'Normalised Cumulative Citations')
+            
+            st.subheader("How the plot works")
+            st.write(tc.norm_cumulative_year_wise_citation_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.norm_cumulative_year_wise_citation_takeaway)
+            
+        elif nav_option == "Citations Distributed over Countries":
+            plot_narrow_bar(data, "Citation", "Citations", "sum")
+            
+            st.subheader("How the plot works")
+            st.write(tc.country_wise_citations_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.country_wise_citations_takeaway)
+            
     elif main_category == "Altmetric Analysis":
         nav_option = st.sidebar.radio("Select a graph to view:",
                                         ("Altmetrics Distributed over Groups", 
+                                         "Normalised Altmetrics Distributed over Groups",
                                          "Altmetrics Distributed over Time",
+                                         "Normalised Altmetrics Distributed over Time",
+                                         "Altmetrics Distributed over Countries",
                                          "Altmetrics of Countries with their Vulnerability"))
         
         if nav_option == "Altmetrics Distributed over Groups":
@@ -713,6 +905,15 @@ def main():
             st.header("Key Takeaways")
             st.write(tc.region_wise_altmetric_takeaway)
             
+        if nav_option == "Normalised Altmetrics Distributed over Groups":
+            plot_bar(data, 'Altmetric', 'sum', "Normalised Altmetrics")
+            
+            st.subheader("How the plot works")
+            st.write(tc.norm_region_wise_altmetric_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.norm_region_wise_altmetric_takeaway)
+            
         elif nav_option == "Altmetrics Distributed over Time":
             plot_line(data, 'Altmetric', 'sum', "Altmetrics")
             
@@ -721,6 +922,24 @@ def main():
             
             st.header("Key Takeaways")
             st.write(tc.year_wise_altmetric_takeaway)
+            
+        elif nav_option == "Normalised Altmetrics Distributed over Time":
+            plot_line(data, 'Altmetric', 'sum', "Normalised Altmetrics")
+            
+            st.subheader("How the plot works")
+            st.write(tc.norm_year_wise_altmetric_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.norm_year_wise_altmetric_takeaway)
+            
+        elif nav_option == "Altmetrics Distributed over Countries":
+            plot_narrow_bar(data, "Altmetric", "Altmetrics", "sum")
+            
+            st.subheader("How the plot works")
+            st.write(tc.country_wise_altmetrics_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.country_wise_altmetrics_takeaway)
             
         elif nav_option == "Altmetrics of Countries with their Vulnerability":
             plot_scatter(data_country_grouped, "VulnerabilityIndex", "Altmetrics_sqrt", "Altmetrics")
@@ -734,7 +953,9 @@ def main():
     elif main_category == "Author Analysis":
         nav_option = st.sidebar.radio("Select a graph to view:",
                                         ("Number of Authors Distributed over Groups", 
+                                         "Population-Normalised Number of Authors Distributed over Groups",
                                          "Number of Authors Distributed over Time",
+                                         "Number of Authors Distributed over Countries",
                                          "Author Correlation with Groups"))
         
         if nav_option == "Number of Authors Distributed over Groups":
@@ -754,6 +975,24 @@ def main():
            
            st.header("Key Takeaways")
            st.write(tc.year_wise_author_takeaway)
+           
+        elif nav_option == "Number of Authors Distributed over Countries":
+           plot_narrow_bar(data, 'Authors', "Number of Authors", "sum")
+           
+           st.subheader("How the plot works")
+           st.write(tc.country_wise_authors_working)
+           
+           st.header("Key Takeaways")
+           st.write(tc.country_wise_authors_takeaway)
+           
+        elif nav_option == "Population-Normalised Number of Authors Distributed over Groups":
+            normalised_bar_plot_author(data, population)
+            
+            st.subheader("How the plot works")
+            st.write(tc.norm_region_wise_author_working)
+            
+            st.header("Key Takeaways")
+            st.write(tc.norm_region_wise_author_takeaway)
             
         elif nav_option == "Author Correlation with Groups":
             plot_heatmap(data)
